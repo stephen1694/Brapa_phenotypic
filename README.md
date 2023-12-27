@@ -17,7 +17,7 @@ This design allowed us to assess evolutionary responses (ancestor-descendant reg
 Detailed methods and the assocated results are discussed in the assocated manuscript published in Evolution.
 
 Data files:<br/>
-For each file, the data is found in the first tab while an explanation of each variable is provided in the second tab.<br/>  
+For each file, the data is found in the first tab while an explanation of each variable is provided in the second tab.
 The file named "Johnson_et_al_2022_Evolution_individuals_data.xls" includes traits measured for all individuals during the test generation of the experiment (flowering time, stem diameter, specific leaf area, and seed mass).<br/> 
 The file named "Johnson_et_al_2022_Evolution_WUE_data.xls" contains data for water-use efficiency, which is a trait that was measured on population pools, during the test generation of the experiment.<br/> 
 The file named "Johnson_et_al_2022_Evolution_EE_subset.xls" contains flowering time and seed mass information for 40 individuals per watering regime (drought or watered) for each generation (1-4) during experimental evolution. This was used to estimate survival and selection during the experiment.<br/> 

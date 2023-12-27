@@ -1,0 +1,1099 @@
+#######################################################################
+########## Code accompanying all analyses in Evoluiton manuscript #####
+#######################################################################
+
+## manuscript title: Rapid, parallel evolution of field mustard (Brassica rapa) under experimental drought
+## Authors: Stephen E. Johnson*, Elena Hamann, and Steven J. Franks
+## *Corresponding Email: sjohnson122@fordham.edu
+
+########## Table of Contents ##########################################
+#######################################################################
+
+## below I have provided the headings for each section or subsection of this script, along with whatever figures or tables of the manuscript they correspond to
+
+# step 0- load in data
+
+# analysis 1- estimating survival during experimental evoluiton (reported in text)
+
+# analysis 2- test for and visualize evoluiton and plasticity (Figure 2, Table 1, Table 3, Table S1)
+## analysis 2A- linear mixed-effects models and planned comparisons for significant effects (lmer results are reported in Table S1; comparisons for significant effects are reported in Table 1)
+## analysis 2B- calculating Cohen's D for evolutionary shifts and plasticity (Table 3)
+## analysis 2C- graphing evolutionary shifts and plasticity (Figure 2)
+
+# analysis 3- selection analyses for traits (Figure 3, Table S2)
+## analysis 3A- univariate selection analyses for traits (reported in columns 4-5 of Table S2)
+## analysis 3B- t test comparing slopes of selection differentials between treatments (reported in text)
+## analysis 3C- multivariate selection analyses for traits (reported in column 3 of Table S2)
+## analysis 3D- correlations among traits under drought (reported in text)
+## analysis 3E- calculating survival of ancestors under each treatment to assess treatment effect on ancestors in the test generation (reported in text)
+## analysis 3F- selection analysis multipanel figure (Figure 3)
+
+# analysis 4- Variance partitioning (Table 2)
+
+# analysis 5- PCVA analysis (Figure 4; Tables S3-S5)
+## analysis 5A- graphing PCVA (Figure 4) and getting principal compondent loadings (Table S5)
+## analysis 5B.1-: PCVA for drought Regime set up 
+## analysis 5B.2- PCVA for watered Regime set up 
+## analysis 5C- running the PCVA (generates mean theta and length for drought or watered PCVA reported in text depending on 4B.1 or 4B.2 ran previously)
+## analysis 5D.1- Bootstrapping for drought PCVA set up 
+## analysis 5D.2- Bootstrapping for watered PCVA set up 
+## analysis 5E- Bootstrapping procedure for either drought or watered PCVA (generates Table S3 or S4 depending on 4D.1 or 4D.2 ran previously)
+
+
+#######################################################################
+########## Step 0- load in data #######################################
+#######################################################################
+
+
+## loading in individual-level data saved as csv file (Johnson_et_al_2021_Evolution_individuals_data.csv) as data frame called individuals_df
+## this file contains all traits measured at individual level
+individuals_df <-read.csv(file.choose(), header = TRUE, stringsAsFactors = FALSE)	
+str(individuals_df)
+
+## need to change some variable structures
+individuals_df$Population<- as.factor(individuals_df$Population)
+individuals_df$Regime<- as.factor(individuals_df$Regime)
+individuals_df$Replicate<- as.factor(individuals_df$Replicate)
+individuals_df$Treatment<- as.factor(individuals_df$Treatment)
+individuals_df$RegTreat<- as.factor(individuals_df$RegTreat)
+individuals_df$Light<- as.factor(individuals_df$Light)
+individuals_df$Stand_FT<-as.numeric(individuals_df$Stand_FT)
+individuals_df$Stand_SD<-as.numeric(individuals_df$Stand_SD)
+individuals_df$Seed_mass_mg<-as.numeric(individuals_df$Seed_mass_mg)
+str(individuals_df)
+
+
+## load WUE data saved as csv file (Johnson_et_al_2021_Evolution_WUE_data.csv) as data frame called WUE_df
+## this file contains WUE data, which was measured on population pools
+WUE_df <- read.csv(file.choose(), header = TRUE)
+str(WUE_df)
+
+## change some variable structures
+WUE_df$Replicate<-as.factor(WUE_df$Replicate)
+WUE_df$Regime<- as.factor(WUE_df$Regime)
+WUE_df$Treatment<- as.factor(WUE_df$Treatment)
+WUE_df$RegTreat<- as.factor(WUE_df$RegTreat)
+WUE_df$Population<- as.factor(WUE_df$Population)
+WUE_df$RepRegTreat<- as.factor(WUE_df$RepRegTreat)
+WUE_df$WUE_sample<- as.factor(WUE_df$WUE_sample)
+str(WUE_df)
+
+
+## loading in experimental evolution survival subset data saved as csv file (Johnson_et_al_2021_Evolution_EE_subset.csv) as data frame called EE_survival_df
+## this file contains survival information for 40 randomly selected individuals per Treatment per Generation during 4 generations of experimental evolution
+EE_survival_df <-read.csv(file.choose(), header = TRUE, stringsAsFactors = FALSE)	
+str(EE_survival_df)
+
+## need to change some variable structures
+EE_survival_df$Generation <- as.factor(EE_survival_df$Generation)
+EE_survival_df$Regime <- as.factor(EE_survival_df$Regime)
+EE_survival_df$GenRegime <- as.factor(EE_survival_df$GenRegime)
+EE_survival_df$Replicate <- as.factor(EE_survival_df$Replicate)
+EE_survival_df$Population <- as.factor(EE_survival_df$Population)
+EE_survival_df$Reprouced <- as.factor(EE_survival_df$Reproduced)
+str(EE_survival_df)
+
+
+
+
+
+#######################################################################
+### analysis 1- estimating survival during experimental evoluiton (reported in text)
+#######################################################################
+
+## load packages
+library(dplyr) # used to group rows by column values (group_by), filter values (filter), count values (tally), calculate statistics (summarize), and for pipe (%>%)
+
+## calculating survival estimate
+Survival <- as.data.frame(dplyr::group_by(EE_survival_df, GenRegime) %>% dplyr::tally(Reproduced == "yes"))
+Survival$Survival <- (Survival[,2]/40) * 100 
+Survival
+
+Counts <- as.data.frame(EE_survival_df %>% dplyr::group_by(GenRegime) %>% dplyr::filter(Seed_count > 0) %>% dplyr::summarize(Mean = mean(Seed_count, na.rm=TRUE), sd = sd(Seed_count, na.rm=TRUE)))
+Counts
+
+Sizes <- as.data.frame(EE_survival_df %>% dplyr::group_by(GenRegime) %>% dplyr::filter(Seed_count > 0) %>% dplyr::summarize(Mean = mean(Seed_size, na.rm=TRUE)))
+size_reduction <- ((Sizes[2,2] - Sizes[1,2]) / Sizes[2,2]) * 100
+size_reduction
+
+
+
+
+
+#######################################################################
+##### analysis 2- test for and visualize evoluiton and plasticity (Figure 2, Table 1, Table 3, Table S1)
+#######################################################################
+
+### analysis 2A- linear mixed-effects models and planned comparisons for significant effects (lmer results are reported in Table S1; comparisons for significant effects are reported in Table 1)
+#######################################################################
+
+## load packages required. If not installed, they can be installed with: install.packages("packagename")
+library(lmerTest) # used to run linear mixed effects models (lmer) and to assess random effect (rand)
+library(emmeans) # used for posthoc tukey tests on fixed effects (emmeans)
+# library(dplyr) # used to filter rows by column values (filter) and for pipe (%>%), already loaded from section 1
+
+### define functions
+
+normality.test <- function(model) {
+shapiro.test(residuals(model))}
+
+homogeneity.test <- function(trait) {
+bartlett.test(trait~interaction(Regime,Treatment), data=individuals_df)}
+
+
+### run lmer for each trait, inspect normality and homogeneity of variance as well as fit of model
+
+## Flowering Time (FT)
+lm1<-lmerTest::lmer(FT~Regime*Treatment+(1|Regime:Replicate), data=individuals_df)
+homogeneity.test(individuals_df$FT)
+normality.test(lm1)
+par(mfrow = c(2, 2))
+plot(individuals_df$FT~individuals_df$RegTreat)
+plot(residuals(lm1))
+qqnorm(individuals_df$FT)
+# fails normality and homogeneity of variances but plots look good and sample sizes >30 so proceeded with raw FT
+
+anova(lm1)
+lmerTest::rand(lm1)
+emmeans::emmeans(lm1, list(pairwise ~ Regime | Treatment))
+
+## stem diameter (SD)
+lm2<-lmerTest::lmer(SD~Regime*Treatment+(1|Regime:Replicate), data=individuals_df)
+homogeneity.test(individuals_df$SD)
+normality.test(lm2)
+par(mfrow = c(2, 2))
+plot(individuals_df$SD~individuals_df$RegTreat)
+plot(residuals(lm2))
+qqnorm(individuals_df$SD)
+# fails normality and homogeneity of variances but plots look good and sample sizes >30 so proceeded with raw SD
+
+anova(lm2)
+lmerTest::rand(lm2)
+
+## Specific leaf area (SLA)
+lm3<-lmerTest::lmer(SLA~Regime*Treatment+(1|Regime:Replicate), data=individuals_df)
+homogeneity.test(individuals_df$SLA)
+normality.test(lm3)
+par(mfrow = c(2, 2))
+plot(individuals_df$SLA~individuals_df$Regime)
+plot(residuals(lm3))
+qqnorm(individuals_df$SLA)
+# fails normality and homogeneity of variances but plots look good and sample sizes >30 so proceeded with raw SLA
+
+anova(lm3)
+lmerTest::rand(lm3)
+emmeans::emmeans(lm3, list(pairwise ~ Regime | Treatment))
+
+## Seed mass
+lm4<-lm(Seed_mass_mg~Regime*Treatment+Regime:Replicate, data=individuals_df)
+homogeneity.test(individuals_df$Seed_mass_mg)
+normality.test(lm4)
+par(mfrow = c(2, 2))
+plot(individuals_df$Seed_mass_mg ~ individuals_df$RegTreat)
+plot(residuals(lm4))
+qqnorm(individuals_df$Seed_mass_mg)
+hist(individuals_df$Seed_mass_mg[individuals_df$Treatment=="Drought"])
+hist(individuals_df$Seed_mass_mg[individuals_df$Treatment=="Watered"])
+#data are bimodal and also variance is heavily skewed by treatment....will analyze seedmass with lmer for each treatment separately
+
+# seed mass under drought
+individuals_D_df <- select(dplyr::filter(individuals_df, Treatment == "Drought"), c(Regime,Replicate,Seed_mass_mg))
+lm4D<-lmerTest::lmer(Seed_mass_mg~Regime+(1|Regime:Replicate), data=individuals_D_df)
+bartlett.test(Seed_mass_mg~Regime, data=individuals_D_df)
+shapiro.test(residuals(lm4D))
+par(mfrow = c(2, 2))
+plot(individuals_D_df$Seed_mass_mg~individuals_D_df$Regime)
+plot(residuals(lm4D))
+qqnorm(individuals_D_df$Seed_mass_mg)
+
+anova(lm4D)
+lmerTest::rand(lm4D)
+emmeans::emmeans(lm4D, list(pairwise ~ Regime))
+
+# seed mass under watered
+individuals_W_df <- select(dplyr::filter(individuals_df, Treatment == "Watered"), c(Regime,Replicate,Seed_mass_mg))
+lm4W<-lmerTest::lmer(Seed_mass_mg~Regime+(1|Regime:Replicate), data=individuals_W_df)
+bartlett.test(Seed_mass_mg~Regime, data=individuals_W_df)
+shapiro.test(residuals(lm4W))
+par(mfrow = c(2, 2))
+plot(individuals_W_df$Seed_mass_mg~individuals_W_df$Regime)
+plot(residuals(lm4W))
+qqnorm(individuals_W_df$Seed_mass_mg)
+
+anova(lm4W)
+lmerTest::rand(lm4W)
+
+## Water use efficiency (WUE)
+lm5<-lmerTest::lmer(d13C~Regime*Treatment+(1|Regime:Replicate), data=WUE_df)
+normality.test(lm5)
+bartlett.test(d13C~RegTreat, data=WUE_df)
+par(mfrow = c(2, 2))
+plot(WUE_df$d13C~WUE_df$RegTreat)
+plot(residuals(lm5))
+qqnorm(WUE_df$d13C)
+# data fail homogeneity of variance but plot diagnostics look good, so proceed on raw d13C
+
+anova(lm5)
+lmerTest::rand(lm5)
+
+
+## analysis 2B- calculating Cohen's D for evolutionary shifts and plasticity (Table 3)
+#######################################################################
+
+## packages required
+# library(emmeans) # used to get means by Regime*Treatment from linear models, already loaded from section 2A
+# library(dplyr) # used to sort data (arrange); already loaded from section 1 and 2A
+library(tidyr) # used to split column in popmeans data frame (separate)
+
+## functions
+get_means <- function(lm) {
+t <- as.data.frame(emmeans::emmeans(lm, ~ Treatment:Regime))
+return(t[,3:5])}
+
+get_means2 <- function(lm) {
+t <- as.data.frame(emmeans::emmeans(lm, list(pairwise ~ Regime)))
+return(t[1:3,3:5])}
+
+## creating data frame to store His*Treat means, SE, and df
+
+regtreatmeans <- data.frame(matrix(NA, nrow=6, ncol = 18)) 
+regtreatmeans[,1] <- c("Drought", "Watered", "Drought", "Watered", "Drought", "Watered")
+regtreatmeans[,2] <- c("Ancestral", "Ancestral", "Drought", "Drought", "Watered", "Watered")
+regtreatmeans[,3] <- c("AD", "AW", "DD", "DW", "WD", "WW")
+regtreatmeans[,4:6] <- get_means(lm1)
+regtreatmeans[,7:9] <- get_means(lm2)
+regtreatmeans[,10:12] <- get_means(lm3)
+regtreatmeans[c(1,3,5),13:15] <- get_means2(lm4D)
+regtreatmeans[c(2,4,6),13:15] <- get_means2(lm4W)
+regtreatmeans[,16:18] <- get_means(lm5)
+colnames(regtreatmeans) <- c("Treatment", "Regime", "RegTreat", "FT", "FT_SE", "df_FT", "SD", "SD_SE", "df_SD", "SLA", "SLA_SE", "df_SLA", "Seed_mass_mg", "Seed_mass_mg_SE", "df_Seed_mass", "WUE", "WUE_SE", "df_WUE")
+regtreatmeans <- dplyr::arrange(regtreatmeans, Regime, desc(Treatment))
+
+## calculating cohens D to quantify evolutionary and plasticity changes
+
+CohensD <- data.frame(matrix(NA, nrow=6, ncol = 5)) 
+colnames(CohensD) <- c("FT", "SD", "SLA", "WUE", "SM")
+rownames(CohensD) <- c("AW", "AW_sd", "AD", "AD_sd","DD", "WW")
+CohensD[1:6,1] <- c(regtreatmeans[1,4], sd(individuals_df$FT[individuals_df$RegTreat=="AW"], na.rm=TRUE), regtreatmeans[2,4], sd(individuals_df$FT[individuals_df$RegTreat=="AD"], na.rm=TRUE), regtreatmeans[4,4], regtreatmeans[5,4])
+CohensD[1:6,2] <- c(regtreatmeans[1,7], sd(individuals_df$SD[individuals_df$RegTreat=="AW"], na.rm=TRUE), regtreatmeans[2,7], sd(individuals_df$SD[individuals_df$RegTreat=="AD"], na.rm=TRUE), regtreatmeans[4,7], regtreatmeans[5,7])
+CohensD[1:6,3] <- c(regtreatmeans[1,10], sd(individuals_df$SLA[individuals_df$RegTreat=="AW"], na.rm=TRUE), regtreatmeans[2,10], sd(individuals_df$SLA[individuals_df$RegTreat=="AD"], na.rm=TRUE), regtreatmeans[4,10], regtreatmeans[5,10])
+CohensD[1:6,4] <- c(regtreatmeans[1,16], sd(WUE_df$d13C[WUE_df$RegTreat=="AW"], na.rm=TRUE), regtreatmeans[2,16], sd(WUE_df$d13C[WUE_df$RegTreat=="AD"], na.rm=TRUE), regtreatmeans[4,16], regtreatmeans[5,16])
+CohensD[1:6,5] <- c(regtreatmeans[1,13], sd(individuals_W_df$Seed_mass_mg[individuals_W_df$Regime=="Ancestral"], na.rm=TRUE), regtreatmeans[2,13], sd(individuals_D_df$Seed_mass_mg[individuals_D_df$Regime=="Ancestral"], na.rm=TRUE), regtreatmeans[4,13], regtreatmeans[5,13])
+
+Table3 <- data.frame(matrix(NA, nrow=3, ncol = 5)) 
+colnames(Table3) <- c("FT", "SD", "SLA", "WUE", "SM")
+rownames(Table3) <- c("Plasticity", "Drought episode", "Watered episode")
+for (i in 1:5) {
+	Table3[1,i] <- abs((CohensD[1,i] - CohensD[3,i]) / sqrt((CohensD[2,i]^2 + CohensD[4,i]^2) / 2))
+	Table3[2,i] <- abs((CohensD[3,i] - CohensD[5,i]) / CohensD[4,i])
+	Table3[3,i] <- abs((CohensD[1,i] - CohensD[6,i]) / CohensD[2,i])
+	}
+Table3 <- format(round(Table3, 2), nsmall = 2)
+Table3
+
+
+## analysis 2C- graphing evolutionary shifts and plasticity (Figure 2)
+#######################################################################
+
+## packages required
+# library(dplyr) # used to filter rows by column values (filter), calculate statistics (summarize), pipe (%>%), and group data by variables (group_by); already loaded from section 1/2A/2B
+library(ggplot2) # used to generate plots (ggplot)
+library(gridExtra) # used to generate multipanel plots (grid.arrange)
+
+# generating df with means and se by population
+popmeans <- data.frame(matrix(NA, nrow=48, ncol = 22))
+popmeans[,1:4] <- dplyr::group_by(individuals_df, interaction(Replicate,Regime,Treatment)) %>% dplyr::filter(complete.cases(FT)) %>% dplyr::summarize(m = mean(FT), number = length(FT), sd = sd(FT))
+popmeans[,5] <- popmeans[,4] / sqrt(popmeans[,3])
+popmeans[,6:9] <- dplyr::group_by(individuals_df, interaction(Replicate,Regime,Treatment)) %>% dplyr::filter(complete.cases(SD)) %>% dplyr::summarize(m = mean(SD), number = length(SD), sd = sd(SD))
+popmeans[,10] <- popmeans[,9] / sqrt(popmeans[,8])
+popmeans[,11:14] <- dplyr::group_by(individuals_df, interaction(Replicate,Regime,Treatment)) %>% dplyr::filter(complete.cases(SLA)) %>% dplyr::summarize(m = mean(SLA), number = length(SLA), sd = sd(SLA))
+popmeans[,15] <- popmeans[,14] / sqrt(popmeans[,13])
+popmeans[,16:17] <- dplyr::group_by(WUE_df, interaction(Replicate,Regime,Treatment)) %>% dplyr::filter(complete.cases(d13C)) %>% dplyr::summarize(m = mean(d13C))
+popmeans[1:24,18:21] <- dplyr::group_by(individuals_D_df, interaction(Replicate,Regime)) %>% dplyr::filter(complete.cases(Seed_mass_mg)) %>% dplyr::summarize(m = mean(Seed_mass_mg), number = length(Seed_mass_mg), sd = sd(Seed_mass_mg))
+popmeans[25:48,18:21] <- dplyr::group_by(individuals_W_df, interaction(Replicate,Regime)) %>% dplyr::filter(complete.cases(Seed_mass_mg)) %>% dplyr::summarize(m = mean(Seed_mass_mg), number = length(Seed_mass_mg), sd = sd(Seed_mass_mg))
+popmeans[,22] <- popmeans[,21] / sqrt(popmeans[,20])
+popmeans <- popmeans[,c(1,2,5,7,10,12,15,17,19,22)]
+colnames(popmeans) <- c("Replicate.Regime.Treatment", "FT", "FT_SE", "SD", "SD_SE", "SLA", "SLA_SE", "WUE", "Seed_mass_mg", "Seed_mass_mg_SE") 
+popmeans <- popmeans %>% tidyr::separate(Replicate.Regime.Treatment, sep = "\\.",into = c("Replicate", "Regime", "Treatment"), remove = TRUE, convert = TRUE)
+popmeans$Replicate <- as.factor(popmeans$Replicate)
+popmeans$Regime<- as.factor(popmeans$Regime)
+popmeans$Treatment <- as.factor(popmeans$Treatment)
+popmeans <- dplyr::arrange(popmeans,Regime,desc(Treatment))
+regtreatmeans$Treatment <- as.factor(regtreatmeans$Treatment)
+regtreatmeans$Regime <- as.factor(regtreatmeans$Regime)
+regtreatmeans$RegTreat <- as.factor(regtreatmeans$RegTreat)
+
+## new code 4/1/2022 to check whether variances were homogeneous by RegTreat group (model that calculated SE for figure assumed homogeneity and output similar SE for groups)
+popmeans[13] <- c(rep("AW", 8), rep("AD", 8), rep("DW", 8), rep("DD", 8), rep("WW", 8), rep("WD", 8))
+colnames(popmeans) <- c("Replicate", "Regime", "Treatment", "FT", "FT_SE", "SD", "SD_SE", "SLA", "SLA_SE", "WUE", "Seed_mass_mg", "Seed_mass_mg_SE", "RegTreat") 
+bartlett.test(FT~RegTreat, data=popmeans)
+bartlett.test(SD~RegTreat, data=popmeans)
+bartlett.test(SLA~RegTreat, data=popmeans)
+bartlett.test(WUE~RegTreat, data=popmeans)
+bartlett.test(Seed_mass_mg~Regime, data=popmeans)
+
+
+## dotplot of each replicate in color, overall mean and se in black
+# red is replicate 1, yellow is replicate 2, sky blue is replicate 3, green is replicate 4, gray is replicate 5, deep blue is replicate 6, brown is replicate 7, and pink is replicate 8 for all panels
+Fig2.A <- ggplot2::ggplot() + geom_dotplot(popmeans, mapping=aes(x=interaction(desc(Treatment),Regime), y=FT, group=interaction(Regime,Replicate,Treatment), fill=Replicate), binaxis='y', stackdir='center', dotsize=2, position=position_dodge(0.5)) + scale_fill_manual(values=c('#CC0000','#FFCC00', '#56B4E9','#009E73','#999999', '#0072B2','#996600','#CC79A7')) + labs(x="Group",y="FT (days)", tag="A)") + scale_x_discrete(labels=c("AW","AD","DW","DD","WW","WD")) + coord_cartesian(ylim=c(27,37)) + theme_classic(base_size=16) + theme(legend.position = "none", plot.title = element_text(hjust = 0.5))  + stat_summary(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),y=FT), fun=mean, geom="point", shape=19, size=4, color="black")  + geom_errorbar(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),ymin=FT-FT_SE, ymax=FT+FT_SE),width=0.3)
+Fig2.B <- ggplot2::ggplot() + geom_dotplot(popmeans, mapping=aes(x=interaction(desc(Treatment),Regime), y=SD, group=interaction(Regime,Replicate,Treatment), fill=Replicate), binaxis='y', stackdir='center', dotsize=2, position=position_dodge(0.5)) + scale_fill_manual(values=c('#CC0000','#FFCC00', '#56B4E9','#009E73','#999999', '#0072B2','#996600','#CC79A7')) + labs(x="Group",y="SD (mm)", tag="B)") + scale_x_discrete(labels=c("AW","AD","DW","DD","WW","WD")) + coord_cartesian(ylim=c(2,5.2)) + theme_classic(base_size=16) + theme(legend.position = "none", plot.title = element_text(hjust = 0.5))  + stat_summary(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),y=SD), fun=mean, geom="point", shape=19, size=4, color="black")  + geom_errorbar(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),ymin=SD-SD_SE, ymax=SD+SD_SE),width=0.3)
+Fig2.C <- ggplot2::ggplot() + geom_dotplot(popmeans, mapping=aes(x=interaction(desc(Treatment),Regime), y=SLA, group=interaction(Regime,Replicate,Treatment), fill=Replicate), binaxis='y', stackdir='center', dotsize=2, position=position_dodge(0.5)) + scale_fill_manual(values=c('#CC0000','#FFCC00', '#56B4E9','#009E73','#999999', '#0072B2','#996600','#CC79A7')) + labs(x="Group",y= expression("SLA "~(mm^2 /mg)), tag="C)") + scale_x_discrete(labels=c("AW","AD","DW","DD","WW","WD")) + coord_cartesian(ylim=c(28,52)) + theme_classic(base_size=16) + theme(legend.position = "none", plot.title = element_text(hjust = 0.5))  + stat_summary(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),y=SLA), fun=mean, geom="point", shape=19, size=4, color="black")  + geom_errorbar(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),ymin=SLA-SLA_SE, ymax=SLA+SLA_SE),width=0.3)
+Fig2.E <- ggplot2::ggplot() + geom_dotplot(popmeans, mapping=aes(x=interaction(desc(Treatment),Regime), y=WUE, group=interaction(Regime,Replicate,Treatment), fill=Replicate), binaxis='y', stackdir='center', dotsize=1.9, position=position_dodge(0.5)) + scale_fill_manual(values=c('#CC0000','#FFCC00', '#56B4E9','#009E73','#999999', '#0072B2','#996600','#CC79A7')) + labs(x="Group",y="WUE (𝛿13C vPDB)", tag="E)") + scale_x_discrete(labels=c("AW","AD","DW","DD","WW","WD"), position="top") + coord_cartesian(ylim=c(-33.5,-30)) + theme_classic(base_size=16) + theme(legend.position = "none", plot.title = element_text(hjust = 0.5))  + stat_summary(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),y=WUE), fun=mean, geom="point", shape=19, size=4, color="black")  + geom_errorbar(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),ymin=WUE-WUE_SE, ymax=WUE+WUE_SE),width=0.3)
+Fig2.D <- ggplot2::ggplot() + geom_dotplot(popmeans, mapping=aes(x=interaction(desc(Treatment),Regime), y=Seed_mass_mg, group=interaction(Regime,Replicate,Treatment), fill=Replicate), binaxis='y', stackdir='center', dotsize=0.8, position=position_dodge(0.5)) + scale_fill_manual(values=c('#CC0000','#FFCC00', '#56B4E9','#009E73','#999999', '#0072B2','#996600','#CC79A7')) + labs(x="Group",y="Seed mass (mg)", tag="D)") + scale_x_discrete(labels=c("AW","AD","DW","DD","WW","WD")) + scale_y_continuous(name="Seed mass (mg)",breaks=c(0, 250, 500, 750, 1000, 1250, 1500, 1750), expand = c(0, 0)) + coord_cartesian(ylim=c(0,1760)) + theme_classic(base_size=16) + theme(legend.position = "none", axis.text.y = element_text(angle=90,hjust=0.5))  + stat_summary(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),y=Seed_mass_mg), fun=mean, geom="point", shape=19, size=4, color="black")  + geom_errorbar(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),ymin=Seed_mass_mg-Seed_mass_mg_SE, ymax=Seed_mass_mg+Seed_mass_mg_SE),width=0.3)
+Fig2 <- gridExtra::grid.arrange(Fig2.A, Fig2.B, Fig2.C, Fig2.D, Fig2.E, nrow = 3, layout_matrix = cbind(c(1,3,5), c(2,4,4)))
+Fig2
+
+
+### Fig 2 version with room for axis breaks for dissertation
+## dotplot of each replicate in color, overall mean and se in black
+# red is replicate 1, yellow is replicate 2, sky blue is replicate 3, green is replicate 4, gray is replicate 5, deep blue is replicate 6, brown is replicate 7, and pink is replicate 8 for all panels
+Fig2.A <- ggplot2::ggplot() + geom_dotplot(popmeans, mapping=aes(x=interaction(desc(Treatment),Regime), y=FT, group=interaction(Regime,Replicate,Treatment), fill=Replicate), binaxis='y', stackdir='center', dotsize=2, position=position_dodge(0.5)) + scale_fill_manual(values=c('#CC0000','#FFCC00', '#56B4E9','#009E73','#999999', '#0072B2','#996600','#CC79A7')) + labs(x="Group",y="FT (days)", tag="A)") + scale_x_discrete(labels=c("AW","AD","DW","DD","WW","WD")) + coord_cartesian(ylim=c(27,37)) + theme_classic(base_size=16) + theme(legend.position = "none", plot.title = element_text(hjust = 0.5))  + stat_summary(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),y=FT), fun=mean, geom="point", shape=19, size=4, color="black")  + geom_errorbar(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),ymin=FT-FT_SE, ymax=FT+FT_SE),width=0.3)
+Fig2.B <- ggplot2::ggplot() + geom_dotplot(popmeans, mapping=aes(x=interaction(desc(Treatment),Regime), y=SD, group=interaction(Regime,Replicate,Treatment), fill=Replicate), binaxis='y', stackdir='center', dotsize=2, position=position_dodge(0.5)) + scale_fill_manual(values=c('#CC0000','#FFCC00', '#56B4E9','#009E73','#999999', '#0072B2','#996600','#CC79A7')) + labs(x="Group",y="SD (mm)", tag="B)") + scale_x_discrete(labels=c("AW","AD","DW","DD","WW","WD")) + coord_cartesian(ylim=c(1.8,5.2)) + theme_classic(base_size=16) + theme(legend.position = "none", plot.title = element_text(hjust = 0.5))  + stat_summary(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),y=SD), fun=mean, geom="point", shape=19, size=4, color="black")  + geom_errorbar(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),ymin=SD-SD_SE, ymax=SD+SD_SE),width=0.3)
+Fig2.C <- ggplot2::ggplot() + geom_dotplot(popmeans, mapping=aes(x=interaction(desc(Treatment),Regime), y=SLA, group=interaction(Regime,Replicate,Treatment), fill=Replicate), binaxis='y', stackdir='center', dotsize=2, position=position_dodge(0.5)) + scale_fill_manual(values=c('#CC0000','#FFCC00', '#56B4E9','#009E73','#999999', '#0072B2','#996600','#CC79A7')) + labs(x="Group",y= expression("SLA "~(mm^2 /mg)), tag="C)") + scale_x_discrete(labels=c("AW","AD","DW","DD","WW","WD")) + coord_cartesian(ylim=c(28,52)) + theme_classic(base_size=16) + theme(legend.position = "none", plot.title = element_text(hjust = 0.5))  + stat_summary(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),y=SLA), fun=mean, geom="point", shape=19, size=4, color="black")  + geom_errorbar(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),ymin=SLA-SLA_SE, ymax=SLA+SLA_SE),width=0.3)
+Fig2.E <- ggplot2::ggplot() + geom_dotplot(popmeans, mapping=aes(x=interaction(desc(Treatment),Regime), y=WUE, group=interaction(Regime,Replicate,Treatment), fill=Replicate), binaxis='y', stackdir='center', dotsize=1.9, position=position_dodge(0.5)) + scale_fill_manual(values=c('#CC0000','#FFCC00', '#56B4E9','#009E73','#999999', '#0072B2','#996600','#CC79A7')) + labs(x="Group",y="WUE (𝛿13C vPDB)", tag="E)") + scale_x_discrete(labels=c("AW","AD","DW","DD","WW","WD"), position="top") + coord_cartesian(ylim=c(-33.5,-29.8)) + theme_classic(base_size=16) + theme(legend.position = "none", plot.title = element_text(hjust = 0.5))  + stat_summary(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),y=WUE), fun=mean, geom="point", shape=19, size=4, color="black")  + geom_errorbar(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),ymin=WUE-WUE_SE, ymax=WUE+WUE_SE),width=0.3)
+Fig2.D <- ggplot2::ggplot() + geom_dotplot(popmeans, mapping=aes(x=interaction(desc(Treatment),Regime), y=Seed_mass_mg, group=interaction(Regime,Replicate,Treatment), fill=Replicate), binaxis='y', stackdir='center', dotsize=0.8, position=position_dodge(0.5)) + scale_fill_manual(values=c('#CC0000','#FFCC00', '#56B4E9','#009E73','#999999', '#0072B2','#996600','#CC79A7')) + labs(x="Group",y="Seed mass (mg)", tag="D)") + scale_x_discrete(labels=c("AW","AD","DW","DD","WW","WD")) + scale_y_continuous(name="Seed mass (mg)",breaks=c(0, 250, 500, 750, 1000, 1250, 1500, 1750), expand = c(0, 0)) + coord_cartesian(ylim=c(0,1760)) + theme_classic(base_size=16) + theme(legend.position = "none", axis.text.y = element_text(angle=90,hjust=0.5))  + stat_summary(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),y=Seed_mass_mg), fun=mean, geom="point", shape=19, size=4, color="black")  + geom_errorbar(regtreatmeans, mapping=aes(x=interaction(desc(Treatment),Regime),ymin=Seed_mass_mg-Seed_mass_mg_SE, ymax=Seed_mass_mg+Seed_mass_mg_SE),width=0.3)
+Fig2 <- gridExtra::grid.arrange(Fig2.A, Fig2.B, Fig2.C, Fig2.D, Fig2.E, nrow = 3, layout_matrix = cbind(c(1,3,5), c(2,4,4)))
+Fig2
+
+
+
+
+
+#######################################################################
+### analysis 3- selection analyses for traits (Figure 3, Table S2)
+#######################################################################
+
+## store ancestor only character values in data frame called Ancestors
+Ancestors <- data.frame(matrix(NA, nrow=560, ncol = 13)) 
+Ancestors[,1] <- individuals_df[1:560,2]
+Ancestors[,2] <- individuals_df$Population[individuals_df$Regime=="Ancestral"]
+Ancestors[,3] <- individuals_df$Treatment[individuals_df$Regime=="Ancestral"]
+Ancestors[,4] <- individuals_df$ML[individuals_df$Regime=="Ancestral"]
+Ancestors[,5] <- individuals_df$FT[individuals_df$Regime=="Ancestral"]
+Ancestors[,6] <- individuals_df$Stand_FT[individuals_df$Regime=="Ancestral"]
+Ancestors[,7] <- individuals_df$SD[individuals_df$Regime=="Ancestral"]
+Ancestors[,8] <- individuals_df$Stand_SD[individuals_df$Regime=="Ancestral"]
+Ancestors[,9] <- individuals_df$SLA[individuals_df$Regime=="Ancestral"]
+Ancestors[,10] <- individuals_df$Stand_SLA[individuals_df$Regime=="Ancestral"]
+Ancestors[,11] <- individuals_df$Seed_mass_mg[individuals_df$Regime=="Ancestral"]
+Ancestors[,12] <- individuals_df$Rel_seed_mass[individuals_df$Regime=="Ancestral"]
+Ancestors[,13] <- individuals_df$Note[individuals_df$Regime=="Ancestral"]
+colnames(Ancestors) <- c("Regime", "Population", "Treatment", "ML", "FT", "Stand_FT", "SD", "Stand_SD", "SLA", "Stand_SLA", "Seed_mass_mg", "Rel_seed_mass", "Note")
+
+## define functions
+inspect.fit <- function(model) {
+par(mfrow = c(2, 2))
+plot(model)}
+
+normality.test <- function(model) {
+shapiro.test(residuals(model))}
+
+inspect.resid.fit <- function(model) {
+par(mfrow = c(2, 2))
+resid<-residuals(model)
+qqnorm(resid)
+qqline(resid)
+plot(resid)}
+
+### analysis 3A- univariate selection analyses for traits (reported in columns 4-5 of Table S2)
+#######################################################################
+
+## FT
+
+lm6 <- lm(Rel_seed_mass[Treatment=="Watered"]~Stand_FT[Treatment=="Watered"], na.action=na.omit, data=Ancestors)
+inspect.fit(lm6)
+normality.test(lm6)
+inspect.resid.fit(lm6)
+anova(lm6)
+summary(lm6)
+
+StandFT2<-Ancestors$Stand_FT^2
+lmq6<-lm(Rel_seed_mass[Treatment=="Watered"]~Stand_FT[Treatment=="Watered"]+StandFT2[Treatment=="Watered"], na.action=na.omit, data=Ancestors)
+anova(lmq6)
+summary(lmq6)
+
+lm7 <- lm(Rel_seed_mass[Treatment=="Drought"]~Stand_FT[Treatment=="Drought"], na.action=na.omit, data=Ancestors)
+inspect.fit(lm7)
+normality.test(lm7)
+inspect.resid.fit(lm7)
+# #187 is borderline 0.5 leverage index
+anova(lm7)
+summary(lm7)
+
+StandFT2<-Ancestors$Stand_FT^2
+lmq7<-lm(Rel_seed_mass[Treatment=="Drought"]~Stand_FT[Treatment=="Drought"]+StandFT2[Treatment=="Drought"], na.action=na.omit, data=Ancestors)
+anova(lmq7)
+summary(lmq7)
+
+## stem diameter
+
+lm8 <- lm(Rel_seed_mass[Treatment=="Watered"]~Stand_SD[Treatment=="Watered"], na.action=na.omit, data=Ancestors)
+inspect.fit(lm8)
+normality.test(lm8)
+inspect.resid.fit(lm8)
+anova(lm8)
+summary(lm8)
+
+Stemdiam2<-Ancestors$Stand_SD^2
+lmq8<-lm(Rel_seed_mass[Treatment=="Watered"]~Stand_SD[Treatment=="Watered"]+Stemdiam2[Treatment=="Watered"], na.action=na.omit, data=Ancestors)
+anova(lmq8)
+summary(lmq8)
+
+lm9 <- lm(Rel_seed_mass[Treatment=="Drought"]~Stand_SD[Treatment=="Drought"], na.action=na.omit, data=Ancestors)
+inspect.fit(lm9)
+normality.test(lm9)
+inspect.resid.fit(lm9)
+anova(lm9)
+summary(lm9)
+
+Stemdiam2<-Ancestors$Stand_SD^2
+lmq9<-lm(Rel_seed_mass[Treatment=="Drought"]~Stand_SD[Treatment=="Drought"]+Stemdiam2[Treatment=="Drought"], na.action=na.omit, data=Ancestors)
+anova(lmq9)
+summary(lmq9)
+
+## SLA
+
+lm10 <- lm(Rel_seed_mass[Treatment=="Watered"]~Stand_SLA[Treatment=="Watered"], na.action=na.omit, data=Ancestors)
+inspect.fit(lm10)
+normality.test(lm10)
+inspect.resid.fit(lm10)
+anova(lm10)
+summary(lm10)
+
+SLA2<-Ancestors$Stand_SLA^2
+lmq10<-lm(Rel_seed_mass[Treatment=="Watered"]~Stand_SLA[Treatment=="Watered"]+SLA2[Treatment=="Watered"], na.action=na.omit, data=Ancestors)
+anova(lmq10)
+summary(lmq10)
+
+lm11 <- lm(Rel_seed_mass[Treatment=="Drought"]~Stand_SLA[Treatment=="Drought"], na.action=na.omit, data=Ancestors)
+inspect.fit(lm11)
+normality.test(lm11)
+inspect.resid.fit(lm11)
+anova(lm11)
+summary(lm11)
+
+SLA2<-Ancestors$Stand_SLA^2
+lmq11<-lm(Rel_seed_mass[Treatment=="Drought"]~Stand_SLA[Treatment=="Drought"]+SLA2[Treatment=="Drought"], na.action=na.omit, data=Ancestors)
+anova(lmq11)
+summary(lmq11)
+
+
+### analysis 3B- t test comparing slopes of selection differentials between treatments (reported in text)
+#######################################################################
+
+## load packages required. If not installed, they can be installed with: install.packages("packagename")
+# library(emmeans) # used to evaluate strength of selection of traits across treatments (lstrends), already loaded from sections 2A/2B
+
+## testing slopes of ancestral drought vs watered FT selection analysis regression lines against each other
+lm12 <- lm(Rel_seed_mass ~ Stand_FT * Treatment, data = Ancestors)
+lm12$coefficients
+slope1.lst <- emmeans::lstrends(lm12, "Treatment", var="Stand_FT")
+pairs(slope1.lst)
+
+## testing slopes of ancestral drought vs watered SLA selection analysis regression lines against each other
+lm13 <- lm(Rel_seed_mass ~ Stand_SLA * Treatment, data = Ancestors)
+lm13$coefficients
+slope2.lst <- emmeans::lstrends(lm13, "Treatment", var="Stand_SLA")
+pairs(slope2.lst)
+
+
+### analysis 3C- multivariate selection analyses for traits (reported in column 3 of Table S2)
+#######################################################################
+
+## watered treatment
+lm14 <- lm(Rel_seed_mass[Treatment=="Watered"]~Stand_FT[Treatment=="Watered"] + Stand_SD[Treatment=="Watered"] + Stand_SLA[Treatment=="Watered"], na.action=na.omit, data=Ancestors)
+inspect.fit(lm14)
+normality.test(lm14)
+inspect.resid.fit(lm14)
+anova(lm14)
+summary(lm14)
+
+## drought treatment
+lm15 <- lm(Rel_seed_mass[Treatment=="Drought"]~Stand_FT[Treatment=="Drought"] + Stand_SD[Treatment=="Drought"] + Stand_SLA[Treatment=="Drought"], na.action=na.omit, data=Ancestors)
+inspect.fit(lm15)
+normality.test(lm15)
+inspect.resid.fit(lm15)
+anova(lm15)
+summary(lm15)
+
+
+### analysis 3D- correlations among traits under drought (reported in text)
+#######################################################################
+
+cor.test(Ancestors$FT[Ancestors$Treatment=="Drought"], Ancestors$SD[Ancestors$Treatment=="Drought"], method=c("pearson"))
+cor.test(Ancestors$FT[Ancestors$Treatment=="Drought"], Ancestors$SLA[Ancestors$Treatment=="Drought"], method=c("pearson"))
+cor.test(Ancestors$SD[Ancestors$Treatment=="Drought"], Ancestors$SLA[Ancestors$Treatment=="Drought"], method=c("pearson"))
+
+
+### analysis 3E- calculating survival of ancestors under each treatment to assess treatment effect on ancestors in the test generation (reported in text)
+#######################################################################
+
+drought_reproduced <- as.data.frame(table(Ancestors$Seed_mass_mg[Ancestors$Treatment=="Drought"] > 0))
+drought_survival <- (drought_reproduced[1,2]/280) * 100
+drought_survival
+# 74%
+
+watered_reproduced <- as.data.frame(table(Ancestors$Seed_mass_mg[Ancestors$Treatment=="Watered"] > 0))
+watered_survival <- (watered_reproduced[1,2]/280) * 100
+watered_survival
+# 99%
+
+# t-test for treatment effect
+t.test(Ancestors$Seed_mass_mg[Ancestors$Treatment=="Drought"],Ancestors$Seed_mass_mg[Ancestors$Treatment=="Watered"])
+
+
+### analysis 3F- selection analysis multipanel figure (Figure 3)
+#######################################################################
+
+## load required packages. If not installed, they can be installed with: install.packages("packagename")
+# library(dplyr) # used for pipe filter (%>%), already loaded from section 1/2A/2B/2C
+# library(ggplot2) # used to generate plots (ggplot), already loaded from section 2C
+# library(gridExtra) # used to generate multipanel plots (grid.arrange), already loaded from section 2C
+
+## making multipanel image
+Fig3.A <- Ancestors %>% ggplot2::ggplot(aes(x=Stand_FT, y=Rel_seed_mass, color=Treatment)) + geom_point(size=1) + scale_x_continuous(name="Standardized FT",breaks=c(-0.5, -0.25, 0, 0.25, 0.5, 0.75), limits=c(-0.5,0.85)) + theme_classic() + scale_y_continuous(name="Relative fitness", limits=c(0,6)) + labs(tag="A)") + scale_color_manual(values=c("tomato1", "lightskyblue2")) + geom_smooth(data = Ancestors %>% filter(!Treatment %in% "Drought"), method=lm, formula = y ~ x + I(x^2), size=1, fill="lightskyblue2") + geom_smooth(data = Ancestors %>% filter(!Treatment %in% "Watered"), method=lm, formula = y ~ x + I(x^2), size=1, fill="tomato1") + theme(text = element_text(size=14), axis.title.x = element_text(size=16), axis.title.y = element_text(size=16), legend.position = c(0.7,0.7)) + guides(colour = guide_legend(override.aes=list(fill=NA))) 
+Fig3.B <- Ancestors %>% ggplot2::ggplot(aes(x=Stand_SD, y=Rel_seed_mass, color=Treatment)) + geom_point(size=1) + scale_x_continuous(name="Standardized SD",breaks=c(-3, -2, -1, 0, 1, 2, 3), limits=c(-3,3)) + theme_classic() + ylab("Relative fitness") + labs(tag="B)") + scale_color_manual(values=c("tomato1", "lightskyblue2")) + geom_smooth(data = Ancestors %>% filter(!Treatment %in% "Drought"), method=lm, formula = y ~ x + I(x^2), size=1, fill="lightskyblue2") + theme(text = element_text(size=14), axis.title.x = element_text(size=16), axis.title.y = element_text(size=16), legend.position = "none")
+Fig3.C <- Ancestors %>% ggplot2::ggplot(aes(x=Stand_SLA, y=Rel_seed_mass, color=Treatment)) + geom_point(size=1)+ scale_x_continuous(name="Standardized SLA",breaks=c(-0.25, 0, 0.25, 0.5), limits=c(-0.3,0.5))  + theme_classic() + ylab("Relative fitness") + labs(tag="C)") + scale_color_manual(values=c("tomato1", "lightskyblue2")) + geom_smooth(data = Ancestors %>% filter(!Treatment %in% "Drought"), method=lm, size=1, fill="lightskyblue2") + geom_smooth(data = Ancestors %>% filter(!Treatment %in% "Watered"), method=lm, size=1, fill="tomato1") + theme(text = element_text(size=14), axis.title.x = element_text(size=16), axis.title.y = element_text(size=16), legend.position = "none") 
+Fig3 <- gridExtra::grid.arrange(Fig3.A, Fig3.B, Fig3.C, nrow = 1)
+Fig3
+
+
+
+
+
+#######################################################################
+### analysis 4- Variance partitioning (Table 2)
+#######################################################################
+
+## load packages required. If not installed, they can be installed with: install.packages("packagename")
+library(lmerTest) # used to run linear mixed effects models (lmer), already loaded from section 1A
+library(MuMIn) # used to get R2m (prop variance explained by fixed effect) and R2c (prop variance explained by fixed + random effect) with r.squaredGLMM function
+
+## setting up data frames
+
+# data for Drought and Ancestor Regime populations means under drought treatment only
+popmeansADdrought <- popmeans[c(9:16,25:32),c(1:4,6,8,11)]
+
+# data for Drought and Watered Regime populations means under drought treatment only
+popmeansAWwatered <- popmeans[c(1:8,33:40),c(1:4,6,8,11)]
+
+# data for Drought and Ancestor Regime plants under drought treatment only
+individualsADdrought <- rbind(individuals_df[1:280,],individuals_df[561:840,])
+
+# data for Watered and Ancestor Regime plants under watered treatment only
+individualsAWwatered <- rbind(individuals_df[281:560,],individuals_df[1401:1680,])
+
+## functions
+
+R2 <- function(trait,dataset) {
+lm <- lmerTest::lmer(trait ~Regime+(1|Regime:Replicate), data=dataset)
+R <- MuMIn::r.squaredGLMM(lm)
+as.numeric(R[1,])}
+
+Regime_R2 <- function(trait, dataset) {
+lm <- lm(trait~Regime, data=dataset)
+sum <- summary(lm)
+as.numeric(sum[8])}
+
+## setting up data frames for output 
+
+VP <- data.frame(matrix(NA, nrow=4, ncol = 4)) 
+colnames(VP) <- c("FT", "SD", "SLA", "SM")
+rownames(VP) <- c("R2m (drought)", "R2c (drought)", "R2m (watered)", "R2c (watered)")
+
+Table2 <- data.frame(matrix(NA, nrow=4, ncol = 4))
+colnames(Table2) <- c("FT", "SD", "SLA", "SM")
+rownames(Table2) <- c("R2,drought", "R2,watered","Regime_R2,drought","Regime_R2,watered")
+
+## partitioning variance with the R2 function
+
+VP[1:2,1] <- R2(individualsADdrought$FT,individualsADdrought)
+VP[3:4,1] <- R2(individualsAWwatered$FT,individualsAWwatered)
+VP[1:2,2] <- R2(individualsADdrought$SD,individualsADdrought)
+VP[3:4,2] <- R2(individualsAWwatered$SD,individualsAWwatered)
+VP[1:2,3] <- R2(individualsADdrought$SLA,individualsADdrought)
+VP[3:4,3] <- R2(individualsAWwatered$SLA,individualsAWwatered)
+VP[1:2,4] <- R2(individualsADdrought$Seed_mass_mg,individualsADdrought)
+VP[3:4,4] <- R2(individualsAWwatered$Seed_mass_mg,individualsAWwatered)
+
+## calculating size of R2m relative to R2c from above for top half of Table 2
+
+for (i in 1:ncol(VP)){
+	Table2[1,i] <- VP[1,i] / VP[2,i]
+	Table2[2,i] <- VP[3,i] / VP[4,i]}
+
+## partitioning variance with the Regime_R2 function for bottom half of Table 2
+
+Table2[3,1] <- Regime_R2(popmeansADdrought$FT,popmeansADdrought)
+Table2[3,2] <- Regime_R2(popmeansADdrought$SD,popmeansADdrought)
+Table2[3,3] <- Regime_R2(popmeansADdrought$SLA,popmeansADdrought)
+Table2[3,4] <- Regime_R2(popmeansADdrought$Seed_mass_mg,popmeansADdrought)
+Table2[4,1] <- Regime_R2(popmeansAWwatered$FT,popmeansAWwatered)
+Table2[4,2] <- Regime_R2(popmeansAWwatered$SD,popmeansAWwatered)
+Table2[4,3] <- Regime_R2(popmeansAWwatered$SLA,popmeansAWwatered)
+Table2[4,4] <- Regime_R2(popmeansAWwatered$Seed_mass_mg,popmeansAWwatered)
+
+## print Table 2
+
+Table2 <- format(round(Table2, 3), nsmall = 3)
+Table2
+
+
+
+
+
+#######################################################################
+### analysis 5- PCVA- Phenotypic change vecotr analysis (Figure 4; Tables S3-S5)
+#######################################################################
+
+## install ggbiplot package- I've provided the commands I used below to install ggbiplot from github (commented out), because this was tricky to find and install
+# install.packages("remotes")
+# remotes::install_github("vqv/ggbiplot")
+
+## load packages
+# library(dplyr) # used for pipe (%>%) and to filter rows by column values (filter), already loaded from section 1/2A/2B/2C/3F
+library(corrplot) # used to make plot of pca loadings (corrplot)
+library(ggbiplot) # used to plot principal component analysis results with ggplot (ggbiplot)
+# library(ggplot2) # used to generate plots (ggplot), already loaded from 2C/3F
+library(cowplot) # used to and plot legend for multipanel graph (get_legend, plot_grid)
+# library(gridExta) # used to generate multipanel plots (grid.arrange), already loaded from 2C/3F
+library(geometry) # used to calcualte dot product of vectors (dot)
+
+
+### analysis 5A- graphing PCVA (Figure 4) and getting principal compondent loadings (Table S5)
+#######################################################################
+
+## subsetting data frame with Drought/Ancestral data under drought only, so that it includes only traits and factors needed for PCVA
+PCVADrought <- individualsADdrought[,c(1:3,14,18,24,29)]
+PCVADrought$FT <- as.numeric(PCVADrought$FT)
+colnames(PCVADrought) <- c("Population", "Regime", "Replicate", "FT", "SD", "SLA", "SM")
+str(PCVADrought)
+
+### PCA by pop for drought episode (drought and ancestors)
+# filter out any indivduals with NA (PCA was having issues running with NA's).
+PCVADrought <- PCVADrought %>% dplyr::filter(!is.na(SM)) %>% dplyr::filter(!is.na(FT)) %>% dplyr::filter(!is.na(SLA))
+str(PCVADrought)
+
+# run PCA on my data
+Drought.pca <- prcomp(PCVADrought[c(4:7)], center = TRUE,scale=TRUE)
+summary(Drought.pca)
+print(Drought.pca)
+# first 2 columns are columns 2-3 of Table S5
+
+# plot of loadings
+corrplot::corrplot(Drought.pca$rotation[,1:2], method="circle", tl.col = "black", tl.srt=0)
+
+# calculate how many individuals of each Population there are, after NA's were dropped
+as.data.frame(table(PCVADrought$Population))
+
+# assign sequence of population identities to variable called popD
+popD <- c(rep("A1", 28), rep("A2",29), rep("A3", 26),rep("A4",20), rep("A5",28), rep("A6", 23), rep("A7",28), rep("A8", 25), rep("D1", 34), rep("D2",34), rep("D3", 35), rep("D4",34), rep("D5",35), rep("D6", 34), rep("D7",35), rep("D8", 33))
+
+# PCA plot with elipses and variables
+Fig4A <- ggbiplot::ggbiplot(Drought.pca, ellipse=TRUE,  labels=rownames(popD), groups=popD, var.axes=FALSE) + labs(x="Standardized PC1", y="Standardized PC2",tag="A)") + scale_y_continuous(limits=c(-3.25,2.7), breaks=c(-3, -2,-1,0, 1, 2)) + scale_x_continuous(limits=c(-2.65,3), breaks=c(-2,-1,0, 1, 2,3)) + scale_colour_manual(values=c("black", "black", "black", "black", "black", "black", "black", "black", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1")) + theme_classic(base_size=16)+ theme(legend.position = "none")
+# % explained by PC1 and PC2 obtained frmo axis labels after running the above line of code, without the + labs() argument
+
+# store elipse centroids in data frame called Fig4A_centroids 
+Fig4A_centroids=aggregate(Fig4A$data[,1:2],list(group=Fig4A$data$group),mean)
+
+# PCA plot only with arrows connecting replcates, color coded by replicate
+Fig4B <- ggbiplot::ggbiplot(Drought.pca, labels=rownames(popD), groups=popD, alpha=0) + labs(x="Standardized PC1",y="Standardized PC2",tag="B)") + ylim(-2,2) + xlim(-2,2) + scale_colour_manual(values=c("black", "black", "black", "black", "black", "black", "black", "black", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1")) + theme_classic(base_size=16)+ theme(legend.position = "none") + geom_segment(aes(x = Fig4A_centroids[1,2], y = Fig4A_centroids[1,3], xend = Fig4A_centroids[9,2]), yend = Fig4A_centroids[9,3], color = c("#FF0000"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) + geom_segment(aes(x = Fig4A_centroids[2,2], y = Fig4A_centroids[2,3], xend = Fig4A_centroids[10,2]), yend = Fig4A_centroids[10,3], color = c("#FFCC00"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) + geom_segment(aes(x = Fig4A_centroids[3,2], y = Fig4A_centroids[3,3], xend = Fig4A_centroids[11,2]), yend = Fig4A_centroids[11,3], color = c("#56B4E9"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) +  geom_segment(aes(x = Fig4A_centroids[4,2], y = Fig4A_centroids[4,3], xend = Fig4A_centroids[12,2]), yend = Fig4A_centroids[12,3], color = c("#009E73"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) +  geom_segment(aes(x = Fig4A_centroids[5,2], y = Fig4A_centroids[5,3], xend = Fig4A_centroids[13,2]), yend = Fig4A_centroids[13,3], color = c("#999999"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) +  geom_segment(aes(x = Fig4A_centroids[6,2], y = Fig4A_centroids[6,3], xend = Fig4A_centroids[14,2]), yend = Fig4A_centroids[14,3], color = c("#0072B2"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) +  geom_segment(aes(x = Fig4A_centroids[7,2], y = Fig4A_centroids[7,3], xend = Fig4A_centroids[15,2]), yend = Fig4A_centroids[15,3], color = c("#996600"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) +  geom_segment(aes(x = Fig4A_centroids[8,2], y = Fig4A_centroids[8,3], xend = Fig4A_centroids[16,2]), yend = Fig4A_centroids[16,3], color = c("#CC79A7"), size = 1, arrow = arrow(length = unit(0.5, "cm")))
+# red is replicate 1, yellow is replicate 2, sky blue is replicate 3, green is replicate 4, gray is replicate 5, deep blue is replicate 6, brown is replicate 7, and pink is replicate 8 for all panels
+
+### PCA by pop for watered episode watered and ancestors)
+
+## subsetting data frame with Watered/Ancestral data under watered treatment only, so that it includes only traits and factors needed for PCVA
+PCVAWatered <- individuals_df[c(281:560,1401:1680),c(1:3,14,18,24,29)]
+PCVAWatered$FT <- as.numeric(PCVAWatered$FT)
+colnames(PCVAWatered) <- c("Population", "Regime", "Replicate", "FT", "SD", "SLA", "SM")
+str(PCVAWatered)
+
+PCVAWatered <- PCVAWatered %>% dplyr::filter(!is.na(SM)) %>% dplyr::filter(!is.na(FT)) %>% dplyr::filter(!is.na(SLA))
+str(PCVAWatered)
+
+# run PCA on my data
+Watered.pca <- prcomp(PCVAWatered[c(4:7)], center = TRUE,scale=TRUE)
+summary(Watered.pca)
+print(Watered.pca)
+# first 2 columns are columns 4-5 of Table S5
+
+# plot of loadings
+corrplot::corrplot(Watered.pca$rotation[,1:2], method="circle", tl.col = "black", tl.srt=0)
+
+# calculate how many individuals of each Population there are, after NA's were dropped
+as.data.frame(table(PCVAWatered$Population))
+
+# assign sequence of population identities to variable called popW
+popW <- c(rep("A1", 35), rep("A2",35), rep("A3", 34),rep("A4",35), rep("A5",34), rep("A6", 33), rep("A7",35), rep("A8", 35), rep("W1", 31), rep("W2",35), rep("W3", 35), rep("W4",35), rep("W5",35), rep("W6", 35), rep("W7",35), rep("W8", 35))
+
+Fig4C <- ggbiplot::ggbiplot(Watered.pca, ellipse=TRUE,  labels=rownames(popW), groups=popW, var.axes=FALSE) + labs(x="Standardized PC1", y="Standardized PC2",tag="C)") + scale_y_continuous(limits=c(-3.25,2.7), breaks=c(-3, -2,-1,0, 1, 2)) + scale_x_continuous(limits=c(-2.65,3), breaks=c(-2,-1,0, 1, 2,3)) + scale_colour_manual(values=c("black", "black", "black", "black", "black", "black", "black", "black", "deepskyblue", "deepskyblue", "deepskyblue", "deepskyblue", "deepskyblue", "deepskyblue", "deepskyblue", "deepskyblue")) + theme_classic(base_size=16)+ theme(legend.position = "none")
+# % explained by PC1 and PC2 obtained frmo axis labels after running the above line of code, without the + labs() argument
+
+# store elipse centroids in data frame called Fig4C_centroids 
+Fig4C_centroids=aggregate(Fig4C$data[,1:2],list(group=Fig4C$data$group),mean)
+
+# PCA plot only with arrows connecting replcates, color coded by replicate
+Fig4D <- ggbiplot::ggbiplot(Watered.pca, labels=rownames(popW), groups=popW, alpha=0) + labs(x="Standardized PC1",y="Standardized PC2",tag="D)") + ylim(-2,2) + xlim(-2,2) + scale_colour_manual(values=c("black", "black", "black", "black", "black", "black", "black", "black", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1", "tomato1")) + theme_classic(base_size=16)+ theme(legend.position = "none") + geom_segment(aes(x = Fig4C_centroids[1,2], y = Fig4C_centroids[1,3], xend = Fig4C_centroids[9,2]), yend = Fig4C_centroids[9,3], color = c("#FF0000"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) + geom_segment(aes(x = Fig4C_centroids[2,2], y = Fig4C_centroids[2,3], xend = Fig4C_centroids[10,2]), yend = Fig4C_centroids[10,3], color = c("#FFCC00"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) + geom_segment(aes(x = Fig4C_centroids[3,2], y = Fig4C_centroids[3,3], xend = Fig4C_centroids[11,2]), yend = Fig4C_centroids[11,3], color = c("#56B4E9"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) +  geom_segment(aes(x = Fig4C_centroids[4,2], y = Fig4C_centroids[4,3], xend = Fig4C_centroids[12,2]), yend = Fig4C_centroids[12,3], color = c("#009E73"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) +  geom_segment(aes(x = Fig4C_centroids[5,2], y = Fig4C_centroids[5,3], xend = Fig4C_centroids[13,2]), yend = Fig4C_centroids[13,3], color = c("#999999"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) +  geom_segment(aes(x = Fig4C_centroids[6,2], y = Fig4C_centroids[6,3], xend = Fig4C_centroids[14,2]), yend = Fig4C_centroids[14,3], color = c("#0072B2"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) +  geom_segment(aes(x = Fig4C_centroids[7,2], y = Fig4C_centroids[7,3], xend = Fig4C_centroids[15,2]), yend = Fig4C_centroids[15,3], color = c("#996600"), size = 1, arrow = arrow(length = unit(0.5, "cm"))) +  geom_segment(aes(x = Fig4C_centroids[8,2], y = Fig4C_centroids[8,3], xend = Fig4C_centroids[16,2]), yend = Fig4C_centroids[16,3], color = c("#CC79A7"), size = 1, arrow = arrow(length = unit(0.5, "cm")))
+# red is replicate 1, yellow is replicate 2, sky blue is replicate 3, green is replicate 4, gray is replicate 5, deep blue is replicate 6, brown is replicate 7, and pink is replicate 8 for all panels
+
+
+## multipanel plot with trait PCVA for figure 4
+
+# creating dummy plot to extract legend showing the 8 different replicates
+leg <- data.frame(matrix(NA, nrow=8, ncol = 2))
+colnames(leg) <- c("replicate", "vector")
+leg[1] <- as.factor(c(1:8))
+leg[2] <- as.numeric(c("1", "2", "3", "4", "5", "6", "7", "8"))
+legplot <- ggplot2::ggplot(leg, aes(replicate, vector, color=replicate)) + geom_line(size=1.5) + scale_color_manual(values = c("#CC0000", "#FFCC00", "#56B4E9", "#009E73", "#999999", "#0072B2", "#996600", "#CC79A7"))
+Fig4.legend <- cowplot::get_legend(legplot)
+Fig4.legend <- cowplot::plot_grid(legend)
+
+# plotting
+Fig4 <- gridExtra::grid.arrange(Fig4A, Fig4B, Fig4.legend, Fig4C, Fig4D, nrow=2, widths=c(4.5,4.5,1))
+Fig4
+# red is replicate 1, yellow is replicate 2, sky blue is replicate 3, green is replicate 4, gray is replicate 5, deep blue is replicate 6, brown is replicate 7, and pink is replicate 8 for all panels
+
+
+### analysis 5B.1-: PCVA for drought Regime set up 
+#######################################################################
+
+## create Ancestral_centroids and Descendant_centroids data frames with Ancestor and drought descendant data
+## DO NOT RUN THIS SECTION IF RUNNING PCVA ON THE WATERED EPISODE
+
+Ancestral_centroids <- Fig3A_centroids[1:8,2:3]
+row.names(Ancestral_centroids) <- c(1:8)
+Ancestral_centroids
+
+Descendant_centroids <- Fig3A_centroids[9:16,2:3]
+row.names(Descendant_centroids) <- c(1:8)
+Descendant_centroids
+
+### analysis 5B.2- PCVA for watered Regime set up 
+#######################################################################
+
+## create Ancestral_centroids and Descendant_centroids data frames with Ancestor and watered descendant data
+## DO NOT RUN THIS SECTION IF RUNNING PCVA ON THE DROUGHT EPISODE
+
+Ancestral_centroids <- Fig3C_centroids[1:8,2:3]
+row.names(Ancestral_centroids) <- c(1:8)
+Ancestral_centroids
+
+Descendant_centroids <- Fig3C_centroids[9:16,2:3]
+row.names(Descendant_centroids) <- c(1:8)
+Descendant_centroids
+
+
+### analysis 5C- running the PCVA (generates mean theta and length for drought or watered PCVA reported in text depending on 4B.1 or 4B.2 ran previously)
+#######################################################################
+
+# create data frame called MeanMeasurements. This is where final mean theta and length values will be stored
+MeanMeasurements <- data.frame(matrix(NA, nrow=2, ncol = 2))
+rownames(MeanMeasurements) <- c("mean_theta", "mean_lengths")
+colnames(MeanMeasurements) <- c("mean", "SE")
+
+# create data frame called mytraitthetas. This is where the angle differences for pairwise comparisons between replicates will be stored in a single column
+mytraitthetas <- data.frame(matrix(NA, nrow=28, ncol = 1))
+colnames(mytraitthetas) <- c("pairwise_thetas")
+rownames(mytraitthetas) <- c("1v2", "1v3", "1v4", "1v5", "1v6", "1v7", "1v8", "2v3", "2v4", "2v5", "2v6", "2v7", "2v8", "3v4", "3v5", "3v6", "3v7", "3v8", "4v5", "4v6", "4v7", "4v8", "5v6", "5v7", "5v8", "6v7", "6v8", "7v8")
+
+# create data frame called mythetas. This is where angle differences for pairwise comparisons between replicates will be stored as as they are calculated with a loop
+mythetas <- data.frame(matrix(NA, nrow=8, ncol = 8))
+colnames(mythetas) <- c("Rep1", "Rep2", "Rep3", "Rep4", "Rep5", "Rep6", "Rep7", "Rep8")
+row.names(mythetas) <- c("vs Rep1", "vs Rep2", "vs Rep3", "vs Rep4", "vs Rep5", "vs Rep6", "vs Rep7", "vs Rep8")
+
+# create data frame called mytraitlengths. This is where the length differences for pairwise comparisons between replicates will be stored in a single column
+mytraitlengths <- data.frame(matrix(NA, nrow=28, ncol = 1))
+colnames(mytraitlengths) <- c("pairwise_lengths")
+rownames(mytraitlengths) <- c("1v2", "1v3", "1v4", "1v5", "1v6", "1v7", "1v8", "2v3", "2v4", "2v5", "2v6", "2v7", "2v8", "3v4", "3v5", "3v6", "3v7", "3v8", "4v5", "4v6", "4v7", "4v8", "5v6", "5v7", "5v8", "6v7", "6v8", "7v8")
+
+# create data frame called mylengths. This is where length differences for pairwise comparisons between replicates will be stored as as they are calculated with a loop
+mylengths <- data.frame(matrix(NA, nrow=8, ncol = 8))
+colnames(mylengths) <- c("Rep1", "Rep2", "Rep3", "Rep4", "Rep5", "Rep6", "Rep7", "Rep8")
+row.names(mylengths) <- c("vs Rep1", "vs Rep2", "vs Rep3", "vs Rep4", "vs Rep5", "vs Rep6", "vs Rep7", "vs Rep8")
+
+# loop to calculate angle and length differences between all pairwise vector comparisons
+# j is a counter variable that iterates through 1-7, reflective of the first vector for each comparison. i is a counter that iterates from j to 7, reflective of the second vector for each comparison
+# for example, when j=1, vector 1 will be compared to vectors 2-8; for j=2, vector 2 will be compared to vectors 3-8; and so on
+# vector j and vector i are each of these vectors. The dotproduct and magnitude of each is calculated and used to calculate the length difference (length variable) and theta difference (thetaji variable)
+# this information is then stored in the appropriate cell of each of the mythetas and mylengths data frmaes
+
+for (j in 1:7) {
+	for (i in j:7) {
+		vectorj <- c(Descendant_centroids[j,1],Descendant_centroids[j,2]) - c(Ancestral_centroids[j,1],Ancestral_centroids[j,2])
+		vectori <- c(Descendant_centroids[i+1,1],Descendant_centroids[i+1,2]) - c(Ancestral_centroids[i+1,1],Ancestral_centroids[i+1,2])
+		dotprod <- geometry::dot(vectorj, vectori)
+		magnitudej <- sqrt(vectorj[1]^2 + vectorj[2]^2)
+		magnitudei <- sqrt(vectori[1]^2 + vectori[2]^2)
+		length <- magnitudej - magnitudei
+		thetaji <- (180/pi) * acos(dotprod / (magnitudej * magnitudei))
+		mythetas[i+1,j] <- thetaji
+		mylengths[i+1,j] <- abs(length)
+		}
+	}
+# mythetas and mylengths formatted to single data fram in mytraitthetas and mytraitlengths, respectively
+mytraitthetas[1:28,1] <- c(mythetas[2:8,1], mythetas[3:8,2], mythetas[4:8,3], mythetas[5:8,4], mythetas[6:8,5], mythetas[7:8,6], mythetas[8,7])
+mytraitlengths[1:28,1] <- c(mylengths[2:8,1], mylengths[3:8,2], mylengths[4:8,3], mylengths[5:8,4], mylengths[6:8,5], mylengths[7:8,6], mylengths[8,7])
+
+# calculate mean theta and length difference, among all pairwise comparisons
+MeanMeasurements[1,1] <- mean(mytraitthetas[,1])
+MeanMeasurements[2,1] <- mean(mytraitlengths[,1])
+MeanMeasurements[1,2] <- sd(mytraitthetas[,1]) / sqrt(28)
+MeanMeasurements[2,2] <- sd(mytraitlengths[,1]) / sqrt(28)
+MeanMeasurements
+# these mean measurements are reported in text for each episode (drought and watered)
+
+
+### analysis 5D.1- Bootstrapping for drought PCVA set up 
+#######################################################################
+
+## THIS SECTION CALCULATES THE ACCOMPANYING P VALUES FOR PCVA FROM 5B.1
+## DO NOT RUN THIS SECTION IF RUNNING PCVA ON THE WATERED EPISODE (VECTORS GENERATED IN 5B.2)
+
+boot <- PCVADrought
+colnames(boot) <- c("Population", "Regime", "Replicate", "FT", "SD", "SLA", "SM")
+
+boot %>% dplyr::count(Regime)
+# A: 207, D: 274
+ancestralN <- 207
+descendantN <- 274
+
+popsizes <- data.frame(matrix(NA, nrow=16, ncol = 3))
+popsizes[,2:3] <- boot %>% dplyr::count(Population)
+popsizes[,1] <- c("Ancestral", "Drought", "Ancestral", "Drought", "Ancestral", "Drought", "Ancestral", "Drought", "Ancestral", "Drought", "Ancestral", "Drought", "Ancestral", "Drought", "Ancestral", "Drought")
+popsizes <- as.data.frame(popsizes[order(popsizes[1]),1:3])
+colnames(popsizes) <- c("Regime", "Population", "N")
+rownames(popsizes) <- c(1:16)
+bootpopN <- c(rep("A1", 28), rep("A2",29), rep("A3", 26),rep("A4",20), rep("A5",28), rep("A6", 23), rep("A7",28), rep("A8", 25), rep("D1", 34), rep("D2",34), rep("D3", 35), rep("D4",34), rep("D5",35), rep("D6", 34), rep("D7",35), rep("D8", 33))
+
+# made bootstrapA data frame to hold Ancestral data from bootstrap sampling
+BootstrapA <- data.frame(matrix(NA, nrow=207, ncol = 5))
+colnames(BootstrapA) <- c("Population", "FT", "SD", "SLA", "SM")
+BootstrapA[,1] <- c(rep("A1", 28), rep("A2",29), rep("A3", 26),rep("A4",20), rep("A5",28), rep("A6", 23), rep("A7",28), rep("A8", 25))
+
+# made bootstrapD data frame to hold Drought descendant data from bootstrap sampling
+BootstrapD <- data.frame(matrix(NA, nrow=274, ncol = 5))
+colnames(BootstrapD) <- c("Population", "FT", "SD", "SLA", "SM")
+BootstrapD[,1] <- c(rep("D1", 34), rep("D2",34), rep("D3", 35), rep("D4",34), rep("D5",35), rep("D6", 34), rep("D7",35), rep("D8", 33))
+
+
+### analysis 5D.2- Bootstrapping for watered PCVA set up  
+#######################################################################
+
+## THIS SECTION CALCULATES THE ACCOMPANYING P VALUES FOR PCVA FROM 5B.2
+## DO NOT RUN THIS SECTION IF RUNNING PCVA ON THE DROUGHT EPISODE (VECTORS GENERATED IN 5B.1)
+
+boot <- PCVAWatered
+colnames(boot) <- c("Population", "Regime", "Replicate", "FT", "SD", "SLA", "SM")
+
+boot %>% dplyr::count(Regime)
+# A: 276, D: 276
+ancestralN <- 276
+descendantN <- 276
+
+popsizes <- data.frame(matrix(NA, nrow=16, ncol = 3))
+popsizes[,2:3] <- boot %>% dplyr::count(Population)
+popsizes[,1] <- c("Ancestral", "Descendant", "Ancestral", "Descendant", "Ancestral", "Descendant", "Ancestral", "Descendant", "Ancestral", "Descendant", "Ancestral", "Descendant", "Ancestral", "Descendant", "Ancestral", "Descendant")
+popsizes <- as.data.frame(popsizes[order(popsizes[1]),1:3])
+colnames(popsizes) <- c("Regime", "Population", "N")
+rownames(popsizes) <- c(1:16)
+bootpopN <- c(rep("A1", 35), rep("A2",35), rep("A3", 34),rep("A4",35), rep("A5",34), rep("A6", 33), rep("A7",35), rep("A8", 35), rep("W1", 31), rep("W2",35), rep("W3", 35), rep("W4",35), rep("W5",35), rep("W6", 35), rep("W7",35), rep("W8", 35))
+
+# made bootstrapA data frame to hold Ancestral data from bootstrap sampling
+BootstrapA <- data.frame(matrix(NA, nrow=276, ncol = 5))
+colnames(BootstrapA) <- c("Population", "FT", "SD", "SLA", "SM")
+BootstrapA[,1] <- c(rep("A1", 35), rep("A2",35), rep("A3", 34),rep("A4",35), rep("A5",34), rep("A6", 33), rep("A7",35), rep("A8", 35))
+
+# made bootstrapD data frame to hold Watered descendant data from bootstrap sampling
+BootstrapD <- data.frame(matrix(NA, nrow=276, ncol = 5))
+colnames(BootstrapD) <- c("Population", "FT", "SD", "SLA", "SM")
+BootstrapD[,1] <- c(rep("W1", 31), rep("W2",35), rep("W3", 35), rep("W4",35), rep("W5",35), rep("W6", 35), rep("W7",35), rep("W8", 35))
+
+
+##### analysis 5E- Bootstrapping procedure for either drought or watered PCVA (generates Table S3 or S4 depending on 4D.1 or 4D.2 ran previously)
+#######################################################################
+
+# setting seed for reproduciblity
+set.seed(112358)
+
+# setting number of iterations (B) and bootstrap samples per iteration for ancestors (ancestralN) and drought descendants (descendantN)
+B <- 10000
+
+# assigning variable to hold data for each trait/group combination separately (ex: variable 1A has FT data for anceestors only)
+border <- ancestralN + 1
+
+variable1A <- boot[1:ancestralN,4]
+variable2A <- boot[1:ancestralN,5]
+variable3A <- boot[1:ancestralN,6]
+variable4A <- boot[1:ancestralN,7]
+variable1D <- boot[border:nrow(boot),4]
+variable2D <- boot[border:nrow(boot),5]
+variable3D <- boot[border:nrow(boot),6]
+variable4D <- boot[border:nrow(boot),7]
+
+# made mybootthetas data frame to hold parwise theta differences between vectors (rows 1-28) for bootstrap iterations (1-B)
+mybootthetas <- data.frame(matrix(NA, nrow=28, ncol = B))
+colnames(mybootthetas) <- c(1:B)
+rownames(mybootthetas) <- c("1v2", "1v3", "1v4", "1v5", "1v6", "1v7", "1v8", "2v3", "2v4", "2v5", "2v6", "2v7", "2v8", "3v4", "3v5", "3v6", "3v7", "3v8", "4v5", "4v6", "4v7", "4v8", "5v6", "5v7", "5v8", "6v7", "6v8", "7v8")
+
+# create data frame called bootthetas. This is where angle differences for pairwise comparisons between replicates for a bootstrap iteration will be stored as as they are calculated with a loop
+bootthetas <- data.frame(matrix(NA, nrow=8, ncol = 7))
+colnames(bootthetas) <- c("Rep1", "Rep2", "Rep3", "Rep4", "Rep5", "Rep6", "Rep7")
+row.names(bootthetas) <- c("vs Rep1", "vs Rep2", "vs Rep3", "vs Rep4", "vs Rep5", "vs Rep6", "vs Rep7", "vs Rep8")
+
+# made mybootlengths data frame to hold parwise length differences between vectors (rows 1-28) for bootstrap iterations (1-B)
+mybootlengths <- data.frame(matrix(NA, nrow=28, ncol = B))
+colnames(mybootlengths) <- c(1:B)
+rownames(mybootlengths) <- c("1v2", "1v3", "1v4", "1v5", "1v6", "1v7", "1v8", "2v3", "2v4", "2v5", "2v6", "2v7", "2v8", "3v4", "3v5", "3v6", "3v7", "3v8", "4v5", "4v6", "4v7", "4v8", "5v6", "5v7", "5v8", "6v7", "6v8", "7v8")
+
+# create data frame called bootlengths. This is where length differences for pairwise comparisons between replicates for a bootstrap iteration will be stored as as they are calculated with a loop
+bootlengths <- data.frame(matrix(NA, nrow=8, ncol = 7))
+colnames(bootlengths) <- c("Rep1", "Rep2", "Rep3", "Rep4", "Rep5", "Rep6", "Rep7")
+row.names(bootlengths) <- c("vs Rep1", "vs Rep2", "vs Rep3", "vs Rep4", "vs Rep5", "vs Rep6", "vs Rep7", "vs Rep8")
+
+# loop to bootstrap sample data from each trait-group combination (variables1A through variable 4D) and the BootstrapA and BootstrapD are rowbound to Bootstrapdf
+# PCA is ran on Bootstrapdf columns 2-5 (these are the traits), and the centroids for each population are calculated with gmean
+# the resulting data frame with centroid coordinates is then divided into two data frams by Regime group: Ancestral and Drought, which are iterated over with loop
+# j is a counter variable that iterates through 1-7, reflective of the first vector for each comparison. i is a counter that iterates from j to 7, reflective of the second vector for each comparison
+# for example, when j=1, vector 1 will be compared to vectors 2-8; for j=2, vector 2 will be compared to vectors 3-8; and so on
+# vector j and vector i are each of these vectors. The dotproduct and magnitude of each is calculated and used to calculate the length difference (length variable) and theta difference (thetaji variable)
+# this information is then stored in the appropriate cell of each of the bootthetas and bootlengths data frmaes
+# information in bootthetas and bootlengths are formatted into single column and stored in mybootthetas and mybootlengths, respectively
+# this is repeated for iterations up to B
+for (b in 1:B) {
+	print(paste("starting on iteration", b))
+	BootstrapA[,2] <- as.data.frame(matrix(sample(variable1A, size=ancestralN*1, replace=FALSE), nrow=ancestralN, ncol=1))
+	BootstrapA[,3] <- as.data.frame(matrix(sample(variable2A, size=ancestralN*1, replace=FALSE), nrow=ancestralN, ncol=1))
+	BootstrapA[,4] <- as.data.frame(matrix(sample(variable3A, size=ancestralN*1, replace=FALSE), nrow=ancestralN, ncol=1))
+	BootstrapA[,5] <- as.data.frame(matrix(sample(variable4A, size=ancestralN*1, replace=FALSE), nrow=ancestralN, ncol=1))
+	BootstrapD[,2] <- as.data.frame(matrix(sample(variable1D, size=descendantN*1, replace=FALSE), nrow=descendantN, ncol=1))
+	BootstrapD[,3] <- as.data.frame(matrix(sample(variable2D, size=descendantN*1, replace=FALSE), nrow=descendantN, ncol=1))
+	BootstrapD[,4] <- as.data.frame(matrix(sample(variable3D, size=descendantN*1, replace=FALSE), nrow=descendantN, ncol=1))
+	BootstrapD[,5] <- as.data.frame(matrix(sample(variable4D, size=descendantN*1, replace=FALSE), nrow=descendantN, ncol=1))
+	Bootstrapdf <- rbind(BootstrapA,BootstrapD)
+	boot.pca <- prcomp(Bootstrapdf[2:5], center = TRUE,scale=TRUE)
+	g <- ggbiplot(boot.pca, ellipse=TRUE,  labels=rownames(bootpopN), groups=bootpopN)
+	gmean=aggregate(g$data[,1:2],list(group=g$data$group),mean)
+	
+	Ancestral <- gmean[1:8,]
+	Descendant <- gmean[9:16,]
+	rownames(Descendant) <- c(1:8)
+
+	for (j in 1:7) {
+		for (i in j:7) {
+			vectorj <- c(Descendant[j,2],Descendant[j,3]) - c(Ancestral[j,2],Ancestral[j,3])
+			vectori <- c(Descendant[i+1,2],Descendant[i+1,3]) - c(Ancestral[i+1,2],Ancestral[i+1,3])
+			dotprod <- geometry::dot(vectorj, vectori)
+			magnitudej <- sqrt(vectorj[1]^2 + vectorj[2]^2)
+			magnitudei <- sqrt(vectori[1]^2 + vectori[2]^2)
+			length <- magnitudej - magnitudei
+			thetaji <- (180/pi) * acos(dotprod / (magnitudej * magnitudei))
+			bootthetas[i+1,j] <- thetaji
+			bootlengths[i+1,j] <- abs(length)
+			}
+		}
+	mybootthetas[1:28,b] <- c(bootthetas[2:8,1], bootthetas[3:8,2], bootthetas[4:8,3], bootthetas[5:8,4], bootthetas[6:8,5], bootthetas[7:8,6], bootthetas[8,7])
+	mybootlengths[1:28,b] <- c(bootlengths[2:8,1], bootlengths[3:8,2], bootlengths[4:8,3], bootlengths[5:8,4], bootlengths[6:8,5], bootlengths[7:8,6], bootlengths[8,7])	
+	}
+mybootthetas
+mybootlengths
+
+## get p value from bootstrapped data sets
+
+# transpose mybootthetas so that columns are now each of the pariwise vector combinations (ex: rep 1 vs rep2, and so on) and rows are bootstrap iterations 1-B
+mybootthetas_t <- as.data.frame(t(as.matrix(mybootthetas)))
+
+# create thetasordered data frame, where columns from mybootthetas_t will be ordered one at a time
+thetasordered <- data.frame(matrix(NA, nrow=B, ncol = 1))
+
+# create mythetapvals, where p value of angle difference for each pairwise comparison will be stored
+mythetapvals <- data.frame(matrix(NA, nrow=28, ncol = 1))
+rownames(mythetapvals) <- c("1v2", "1v3", "1v4", "1v5", "1v6", "1v7", "1v8", "2v3", "2v4", "2v5", "2v6", "2v7", "2v8", "3v4", "3v5", "3v6", "3v7", "3v8", "4v5", "4v6", "4v7", "4v8", "5v6", "5v7", "5v8", "6v7", "6v8", "7v8")
+colnames(mythetapvals) <- c("pval")
+
+# loop iterates over columns 1:28 of mybootthetas_t and stores ordered column in thetasordered data frame
+# for each row (1:B), loop iteratoes through thetasordered and stops when it becomes greater (more extreme) than thetaobserved
+# then outputs p value, calculated as the proportion of bootstrap sampled angle difference for the particular pairwise comparison more extreme than the angle observed
+# if all mybootthetas is greater than all 1000, p value is outputted as 0 but will be recorded as < 0.001
+# p value is stored in appropriate row of mythetapvals data frame
+for (a in 1:28) {
+	thetaobserved <- mytraitthetas[a,1]
+	thetasordered[,1] <- as.data.frame(mybootthetas_t[order(mybootthetas_t[a]),a])
+	comparison <- colnames(mybootthetas_t[a])
+	for (b in 1:B) {
+		if (thetasordered[b,1] > thetaobserved) {
+			print(paste("Coming out from for loop where value =", b-1))
+			p <- (B-(b-1))/B
+			print(paste("p value for test of parallel evolution for", comparison,"therefore is =", p))
+			break
+			} else if (b == B) {
+			print(paste("Went through all values, none were greater than", thetaobserved))
+			print(paste("p value for test of parallel evolution is 0 for ", comparison))
+			p <- 0
+			}
+		}
+	mythetapvals[a,1] <- p
+	}
+
+# transpose mybootlengths so that columns are now each of the pariwise vector combinations (ex: rep 1 vs rep2, and so on) and rows are bootstrap iterations 1-B
+mybootlengths_t <- as.data.frame(t(as.matrix(mybootlengths)))
+
+# create lengthssordered data frame, where columns from mybootlengths_t will be ordered one at a time
+lengthsordered <- data.frame(matrix(NA, nrow=B, ncol = 1))
+
+# create mylengthpvals, where p value of length difference for each pairwise comparison will be stored
+mylengthpvals <- data.frame(matrix(NA, nrow=28, ncol = 1))
+rownames(mylengthpvals) <- c("1v2", "1v3", "1v4", "1v5", "1v6", "1v7", "1v8", "2v3", "2v4", "2v5", "2v6", "2v7", "2v8", "3v4", "3v5", "3v6", "3v7", "3v8", "4v5", "4v6", "4v7", "4v8", "5v6", "5v7", "5v8", "6v7", "6v8", "7v8")
+colnames(mylengthpvals) <- c("pval")
+
+# loop iterates over columns 1:28 of mybootlengths_t and stores ordered column in lengthsordered data frame
+# for each row (1:B), loop iteratoes through lengthsordered and stops when it becomes greater (more extreme) than lengthobserved
+# then outputs p value, calculated as the proportion of bootstrap sampled length differences for the particular pairwise comparison more extreme than the theta observed
+# if all mybootlengths are greater than all 1000, p value is outputted as 0 but will be recorded as < 0.001
+# p value is stored in appropriate row of mylengthpvals data frame
+for (a in 1:28) {
+	lengthobserved <- mytraitlengths[a,1]
+	lengthsordered[,1] <- as.data.frame(mybootlengths_t[order(mybootlengths_t[a]),a])
+	comparison <- colnames(mybootlengths_t[a])
+	for (b in 1:B) {
+		if (lengthsordered[b,1] > lengthobserved) {
+			print(paste("Coming out from for loop after value =", b-1))
+			p <- (B-(b-1))/B
+			print(paste("p value for test of parallel evolution for", comparison,"therefore is =", p))
+			break
+			} else if (b == B) {
+			print(paste("Went through all values, none were greater than", thetaobserved))
+			print(paste("p value for test of parallel evolution is 0 for ", comparison))
+			p <- 0
+			}
+		}
+	mylengthpvals[a,1] <- p
+	}
+
+## adding p values to tables of pairwise thetas, lengths
+
+# add p vals from mythetapvals to mythetas data frame, which already holds observed thetas for each pairwise comparison
+mythetas[1,2:8] <- mythetapvals[1:7,1]
+mythetas[2,3:8] <- mythetapvals[8:13,1]
+mythetas[3,4:8] <- mythetapvals[14:18,1]
+mythetas[4,5:8] <- mythetapvals[19:22,1]
+mythetas[5,6:8] <- mythetapvals[23:25,1]
+mythetas[6,7:8] <- mythetapvals[26:27,1]
+mythetas[7,8] <- mythetapvals[28,1]
+
+# add p vals from mylengthpvals to mylengths data frame, which already holds observed length differences for each pairwise comparison
+mylengths[1,2:8] <- mylengthpvals[1:7,1]
+mylengths[2,3:8] <- mylengthpvals[8:13,1]
+mylengths[3,4:8] <- mylengthpvals[14:18,1]
+mylengths[4,5:8] <- mylengthpvals[19:22,1]
+mylengths[5,6:8] <- mylengthpvals[23:25,1]
+mylengths[6,7:8] <- mylengthpvals[26:27,1]
+mylengths[7,8] <- mylengthpvals[28,1]
+
+# round to 3 decimals for output
+Theta.pval.table <- format(round(mythetas, 3), nsmall = 3)
+Theta.pval.table
+# this is either Table S3A or S4A, depending on whether section 5D.1 or 5D.2 was ran prior
+
+Length.pval.table <- format(round(mylengths, 3), nsmall = 3)
+Length.pval.table
+# this is either Table S3B or S4B, depending on whether section 5D.1 or 5D.2 was ran prior

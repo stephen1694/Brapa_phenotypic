@@ -1,6 +1,6 @@
 README file for Johnson et al. 2022 manuscript published in Evolution
 
-Full manuscript citation:  
+Full manuscript citation:<br/>
 Johnson, S. E., Hamann, E., & Franks, S. J. (2022). Rapid, parallel evolution of field mustard (Brassica rapa) under experimental drought. Evolution, 76(2), 262-274.
 
 Dryad repository location: 
